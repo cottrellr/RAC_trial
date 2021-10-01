@@ -1,0 +1,96 @@
+---
+title: "running_RAC_model"
+output: html_document
+---
+
+#libraries
+```{r}
+#install.packages("RAC")
+
+library(RAC)
+library(here)
+library(tidyverse)
+
+```
+
+#create folder structure
+```{r}
+userpath <- here()
+
+RAC::Bream_ind_skeleton(here())
+
+RAC::Bream_pop_skeleton(userpath)
+
+```
+
+#load forcings into workspace
+
+```{r}
+
+forcings <- RAC::Bream_ind_dataloader(here())
+
+forcings <- RAC::Bream_pop_dataloader(userpath)
+
+
+
+forcings_function <- function (userpath) 
+{
+    Ttem = read.csv(paste0(userpath, "/Bream_individual/Inputs/Forcings//Water_temperature.csv"), 
+        sep = ",", header = FALSE)
+    DaF = read.csv(paste0(userpath, "/Bream_individual/Inputs/Forcings//Feeding.csv"), 
+        sep = ",", header = FALSE)
+    Param_matrix = read.csv(paste0(userpath, "/Bream_individual/Inputs/Parameters//Parameters.csv"), 
+        sep = ",")
+    timeT = as.matrix(Ttem[, 1])
+    Temperature = as.double(as.matrix(Ttem[, 2]))
+    timeG = as.matrix(DaF[, 1])
+    G = as.double(as.matrix(DaF[, 2]))
+    Dates = Param_matrix[22:23, 3]
+    t0 = min(as.numeric(as.Date(timeT[1], "%d/%m/%Y")), as.numeric(as.Date(timeG[1], 
+        "%d/%m/%Y")))
+    ti = as.numeric(as.Date(Dates[1], "%d/%m/%Y")) - t0
+    tf = as.numeric(as.Date(Dates[2], "%d/%m/%Y")) - t0
+    timeTseries = as.numeric(as.Date(timeT, "%d/%m/%Y")) - t0
+    timeGseries = as.numeric(as.Date(timeG, "%d/%m/%Y")) - t0
+    Ttem = as.vector(matrix(0, nrow = ti - 1))
+    Gtem = as.vector(matrix(0, nrow = ti - 1))
+    i = ti:tf + 1
+    Ttem2 = approx(timeTseries, Temperature, xout = i)
+    Gtem2 = approx(timeGseries, G, xout = i)
+    Tint = c(Ttem, Ttem2$y)
+    Gint = c(Gtem, Gtem2$y)
+    daysT <- seq(as.Date(timeT[1], format = "%d/%m/%Y"), by = "days", 
+        length = length(Tint))
+    daysG <- seq(as.Date(timeG[1], format = "%d/%m/%Y"), by = "days", 
+        length = length(Tint))
+    if ((ti < (as.numeric(as.Date(timeT[1], "%d/%m/%Y")) - t0)) | 
+        (ti < (as.numeric(as.Date(timeG[1], "%d/%m/%Y")) - t0))) {
+        cat("ERROR: forcings are beginning after the specified integration start\n")
+        cat("Impossible to proceed with interpolation\n")
+    }
+    if ((ti > (as.numeric(as.Date(timeT[length(timeT)], "%d/%m/%Y")) - 
+        t0)) | (ti > (as.numeric(as.Date(timeG[length(timeG)], 
+        "%d/%m/%Y")) - t0))) {
+        cat("ERROR: forcing are ending before the specified integration end\n")
+        cat("Impossible to proceed with interpolation\n")
+    }
+    forcings = list(daysT, Tint, daysG, Gint)
+    return(forcings)
+}
+
+
+
+water_temperature <- read_csv(here("Bream_individual", "Inputs", "Forcings", "Water_temperature.csv"))
+
+
+```
+
+
+#run model
+```{r}
+
+Output <- Bream_ind_main(userpath = userpath, forcings)
+
+RAC::Bream_pop_main(userpath, forcings = forcings)
+```
+
